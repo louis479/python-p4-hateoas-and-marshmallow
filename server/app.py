@@ -15,7 +15,30 @@ app.json.compact = False
 migrate = Migrate(app, db)
 db.init_app(app)
 
+ma = Marshmallow(app)
 api = Api(app)
+
+
+
+# Define the Newsletter schema for serialization
+class NewsletterSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = Newsletter
+        load_instance = True
+
+    title =ma.auto_field()
+    published_at = ma.auto_field()
+
+    url = ma.Hyperlinks(
+        {
+            'self': ma.URLFor('newsletterbyid', values=dict(id='<id>')),
+            'collection': ma.URLFor('newsletters')
+        }
+    )
+# Initialize the schema
+newsletter_schema = NewsletterSchema() 
+newsletter_schemas = NewsletterSchema(many=True)
+
 
 class Index(Resource):
 
@@ -38,13 +61,11 @@ class Newsletters(Resource):
 
     def get(self):
         
-        response_dict_list = [n.to_dict() for n in Newsletter.query.all()]
-
+        newsletters = Newsletter.query.all()
         response = make_response(
-            response_dict_list,
+            newsletter_schemas.dump(newsletters),
             200,
         )
-
         return response
 
     def post(self):
@@ -57,16 +78,23 @@ class Newsletters(Resource):
         db.session.add(new_record)
         db.session.commit()
 
-        response_dict = new_record.to_dict()
 
         response = make_response(
-            response_dict,
+            newsletter_schema.dump(new_record),
             201,
         )
 
         return response
+    
+    def get(self, id):
+        newsletter = Newsletter.query.get_or_404(id)
+        response = make_response(
+            newsletter_schema.dump(newsletter),
+            200
+        )
+        return response
 
-api.add_resource(Newsletters, '/newsletters')
+api.add_resource(Newsletters, '/newsletters', endpoint="newsletters")
 
 class NewsletterByID(Resource):
 
@@ -115,8 +143,7 @@ class NewsletterByID(Resource):
 
         return response
 
-api.add_resource(NewsletterByID, '/newsletters/<int:id>')
-
+api.add_resource(NewsletterByID, '/newsletters/<int:id>', endpoint="newsletterbyid")
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
